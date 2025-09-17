@@ -17,6 +17,9 @@ import tempfile
 class WaybarTailscaleModule:
     def __init__(self):
         self.pause_file = os.path.join(tempfile.gettempdir(), "tailscale_pause_state")
+        self.duration_file = os.path.join(tempfile.gettempdir(), "tailscale_pause_duration")
+        self.pause_durations = [1, 5, 10, 15, 30, 60, 120]  # minutes
+        self.default_duration_index = 1  # 5 minutes
         
     def get_machine_name(self):
         """Get the current machine's Tailscale name"""
@@ -109,8 +112,61 @@ class WaybarTailscaleModule:
                 'machine_name': 'unknown',
                 'error': str(e)
             }
-
     def get_pause_status(self):
+        """Check if Tailscale is in paused state"""
+        try:
+            if os.path.exists(self.pause_file):
+                with open(self.pause_file, 'r') as f:
+                    pause_end_str = f.read().strip()
+                    pause_end = datetime.fromisoformat(pause_end_str)
+                    
+                    if datetime.now() < pause_end:
+                        remaining = pause_end - datetime.now()
+                        minutes = int(remaining.total_seconds() // 60)
+                        seconds = int(remaining.total_seconds() % 60)
+                        return f"{minutes}m {seconds}s remaining"
+                    else:
+                        # Pause expired, remove file
+                        os.remove(self.pause_file)
+                        return None
+        except Exception:
+            pass
+        return None
+    
+    def get_pause_duration(self):
+        """Get current pause duration in minutes"""
+        try:
+            if os.path.exists(self.duration_file):
+                with open(self.duration_file, 'r') as f:
+                    index = int(f.read().strip())
+                    if 0 <= index < len(self.pause_durations):
+                        return self.pause_durations[index], index
+        except Exception:
+            pass
+        return self.pause_durations[self.default_duration_index], self.default_duration_index
+
+    def set_pause_duration_index(self, index):
+        """Set pause duration index"""
+        try:
+            # Clamp index to valid range
+            index = max(0, min(index, len(self.pause_durations) - 1))
+            with open(self.duration_file, 'w') as f:
+                f.write(str(index))
+            return self.pause_durations[index]
+        except Exception:
+            return self.pause_durations[self.default_duration_index]
+
+    def adjust_pause_duration(self, direction):
+        """Adjust pause duration up or down"""
+        current_duration, current_index = self.get_pause_duration()
+        
+        if direction == "up":
+            new_index = min(current_index + 1, len(self.pause_durations) - 1)
+        else:  # down
+            new_index = max(current_index - 1, 0)
+        
+        new_duration = self.set_pause_duration_index(new_index)
+        return new_duration, current_duration != new_duration
         """Check if Tailscale is in paused state"""
         try:
             if os.path.exists(self.pause_file):
@@ -133,27 +189,29 @@ class WaybarTailscaleModule:
 
     def format_output(self, status):
         """Format output for Waybar JSON"""
+        current_duration, _ = self.get_pause_duration()
+        
         if status['state'] == 'Connected':
             icon = "🟢"
             text = "TS"
             css_class = "connected"
-            tooltip = f"Tailscale Connected\nMachine: {status['machine_name']}\nIP: {status.get('tailscale_ip', 'N/A')}\nOnline Peers: {status.get('peer_count', 0)}\n\nLeft Click: Toggle Connection\nRight Click: Pause 5min\nMiddle Click: Refresh"
+            tooltip = f"Tailscale Connected\nMachine: {status['machine_name']}\nIP: {status.get('tailscale_ip', 'N/A')}\nOnline Peers: {status.get('peer_count', 0)}\nPause Duration: {current_duration}min\n\nLeft Click: Toggle Connection\nRight Click: Pause {current_duration}min\nMiddle Click: Refresh\nScroll: Adjust pause duration"
         elif status['state'] == 'Paused':
             icon = "⏸️"
             text = "TS"
             css_class = "paused"
-            tooltip = f"Tailscale Paused\nMachine: {status['machine_name']}\n{status['pause_info']}\n\nLeft Click: Resume\nRight Click: Stop\nMiddle Click: Refresh"
+            tooltip = f"Tailscale Paused\nMachine: {status['machine_name']}\n{status['pause_info']}\nPause Duration: {current_duration}min\n\nLeft Click: Resume\nRight Click: Stop\nMiddle Click: Refresh\nScroll: Adjust pause duration"
         elif status['state'] == 'Stopped':
             icon = "🔴"
             text = "TS"
             css_class = "disconnected"
-            tooltip = f"Tailscale Disconnected\nMachine: {status['machine_name']}\n\nLeft Click: Connect\nRight Click: Pause 5min\nMiddle Click: Refresh"
+            tooltip = f"Tailscale Disconnected\nMachine: {status['machine_name']}\nPause Duration: {current_duration}min\n\nLeft Click: Connect\nRight Click: Pause {current_duration}min\nMiddle Click: Refresh\nScroll: Adjust pause duration"
         else:
             icon = "🔴"
             text = "TS"
             css_class = "error"
             error_msg = status.get('error', 'Unknown error')
-            tooltip = f"Tailscale Error\nState: {status['state']}\nError: {error_msg}\n\nLeft Click: Try Connect\nMiddle Click: Refresh"
+            tooltip = f"Tailscale Error\nState: {status['state']}\nError: {error_msg}\nPause Duration: {current_duration}min\n\nLeft Click: Try Connect\nMiddle Click: Refresh\nScroll: Adjust pause duration"
 
         return {
             "text": f"{icon} {text}",
@@ -184,16 +242,18 @@ class WaybarTailscaleModule:
         return self.run_command(['sudo', 'tailscale', 'down'])
 
     def pause_tailscale(self):
-        """Pause Tailscale for 5 minutes"""
+        """Pause Tailscale for the configured duration"""
+        current_duration, _ = self.get_pause_duration()
+        
         if self.run_command(['sudo', 'tailscale', 'down']):
             # Set pause state
-            pause_end = datetime.now() + timedelta(minutes=5)
+            pause_end = datetime.now() + timedelta(minutes=current_duration)
             with open(self.pause_file, 'w') as f:
                 f.write(pause_end.isoformat())
             
             # Schedule auto-resume
             def auto_resume():
-                time.sleep(300)  # 5 minutes
+                time.sleep(current_duration * 60)  # Convert minutes to seconds
                 if os.path.exists(self.pause_file):
                     os.remove(self.pause_file)
                     self.start_tailscale()
@@ -219,7 +279,7 @@ class WaybarTailscaleModule:
                 
         elif button == "right":
             if status['state'] == 'Connected':
-                # Pause for 5 minutes
+                # Pause for configured duration
                 self.pause_tailscale()
             elif status['state'] == 'Paused':
                 # Stop completely
@@ -231,6 +291,11 @@ class WaybarTailscaleModule:
         elif button == "middle":
             # Refresh - just update status
             pass
+
+    def handle_scroll(self, direction):
+        """Handle scroll wheel actions"""
+        new_duration, changed = self.adjust_pause_duration(direction)
+        return new_duration if changed else None
 
     def get_status_output(self):
         """Get current status for Waybar output"""
@@ -249,6 +314,8 @@ def main():
     parser = argparse.ArgumentParser(description='Waybar Tailscale Module')
     parser.add_argument('--click', choices=['left', 'right', 'middle'], 
                        help='Handle click action')
+    parser.add_argument('--scroll', choices=['up', 'down'], 
+                       help='Handle scroll action')
     parser.add_argument('--status', action='store_true', 
                        help='Output current status (default)')
     
@@ -261,6 +328,9 @@ def main():
             module.handle_click(args.click)
             # After handling click, output updated status
             time.sleep(1)  # Brief delay for command to take effect
+        elif args.scroll:
+            new_duration = module.handle_scroll(args.scroll)
+            # Don't need delay for scroll, just output updated status
         
         # Default action is to output status
         output = module.get_status_output()

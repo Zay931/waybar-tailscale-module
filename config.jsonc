@@ -139,6 +139,8 @@
     "on-click": "python3 ~/.config/waybar/tailscale_module.py --click left",
     "on-click-right": "python3 ~/.config/waybar/tailscale_module.py --click right",
     "on-click-middle": "python3 ~/.config/waybar/tailscale_module.py --click middle",
+    "on-scroll-up": "python3 ~/.config/waybar/tailscale_module.py --scroll up",
+    "on-scroll-down": "python3 ~/.config/waybar/tailscale_module.py --scroll down",
     "escape": true
   }
 }
