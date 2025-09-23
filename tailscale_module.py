@@ -112,6 +112,7 @@ class WaybarTailscaleModule:
                 'machine_name': 'unknown',
                 'error': str(e)
             }
+
     def get_pause_status(self):
         """Check if Tailscale is in paused state"""
         try:
@@ -132,7 +133,7 @@ class WaybarTailscaleModule:
         except Exception:
             pass
         return None
-    
+
     def get_pause_duration(self):
         """Get current pause duration in minutes"""
         try:
@@ -167,25 +168,6 @@ class WaybarTailscaleModule:
         
         new_duration = self.set_pause_duration_index(new_index)
         return new_duration, current_duration != new_duration
-        """Check if Tailscale is in paused state"""
-        try:
-            if os.path.exists(self.pause_file):
-                with open(self.pause_file, 'r') as f:
-                    pause_end_str = f.read().strip()
-                    pause_end = datetime.fromisoformat(pause_end_str)
-                    
-                    if datetime.now() < pause_end:
-                        remaining = pause_end - datetime.now()
-                        minutes = int(remaining.total_seconds() // 60)
-                        seconds = int(remaining.total_seconds() % 60)
-                        return f"{minutes}m {seconds}s remaining"
-                    else:
-                        # Pause expired, remove file
-                        os.remove(self.pause_file)
-                        return None
-        except Exception:
-            pass
-        return None
 
     def format_output(self, status):
         """Format output for Waybar JSON"""
@@ -251,16 +233,58 @@ class WaybarTailscaleModule:
             with open(self.pause_file, 'w') as f:
                 f.write(pause_end.isoformat())
             
-            # Schedule auto-resume
-            def auto_resume():
-                time.sleep(current_duration * 60)  # Convert minutes to seconds
-                if os.path.exists(self.pause_file):
-                    os.remove(self.pause_file)
-                    self.start_tailscale()
-            
-            threading.Thread(target=auto_resume, daemon=True).start()
+            # Schedule auto-resume - create a separate script that handles the resume
+            self.schedule_auto_resume(current_duration)
             return True
         return False
+
+    def schedule_auto_resume(self, duration_minutes):
+        """Schedule auto-resume using a separate background process"""
+        import subprocess
+        import sys
+        
+        # Create a command that will run after the specified time
+        resume_command = [
+            'bash', '-c', 
+            f'sleep {duration_minutes * 60} && python3 {sys.argv[0]} --auto-resume'
+        ]
+        
+        # Start the background process
+        try:
+            subprocess.Popen(resume_command, 
+                           stdout=subprocess.DEVNULL, 
+                           stderr=subprocess.DEVNULL,
+                           start_new_session=True)
+        except Exception:
+            # Fallback to threading if subprocess fails
+            def auto_resume():
+                time.sleep(duration_minutes * 60)
+                self.auto_resume()
+            
+            threading.Thread(target=auto_resume, daemon=False).start()
+
+    def auto_resume(self):
+        """Automatically resume Tailscale after pause period"""
+        try:
+            # Check if pause file still exists (user didn't manually resume)
+            if os.path.exists(self.pause_file):
+                # Read the pause end time
+                with open(self.pause_file, 'r') as f:
+                    pause_end_str = f.read().strip()
+                    pause_end = datetime.fromisoformat(pause_end_str)
+                
+                # Only resume if the pause period has actually ended
+                if datetime.now() >= pause_end:
+                    os.remove(self.pause_file)
+                    # Attempt to reconnect
+                    self.start_tailscale()
+        except Exception:
+            # If anything goes wrong, just remove the pause file
+            if os.path.exists(self.pause_file):
+                try:
+                    os.remove(self.pause_file)
+                except Exception:
+                    pass
 
     def handle_click(self, button):
         """Handle click actions"""
@@ -318,13 +342,19 @@ def main():
                        help='Handle scroll action')
     parser.add_argument('--status', action='store_true', 
                        help='Output current status (default)')
+    parser.add_argument('--auto-resume', action='store_true', 
+                       help='Auto-resume after pause (internal use)')
     
     args = parser.parse_args()
     
     try:
         module = WaybarTailscaleModule()
         
-        if args.click:
+        if args.auto_resume:
+            # Handle auto-resume
+            module.auto_resume()
+            return
+        elif args.click:
             module.handle_click(args.click)
             # After handling click, output updated status
             time.sleep(1)  # Brief delay for command to take effect
