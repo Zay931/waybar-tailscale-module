@@ -177,23 +177,23 @@ class WaybarTailscaleModule:
             icon = "🟢"
             text = "TS"
             css_class = "connected"
-            tooltip = f"Tailscale Connected\nMachine: {status['machine_name']}\nIP: {status.get('tailscale_ip', 'N/A')}\nOnline Peers: {status.get('peer_count', 0)}\nPause Duration: {current_duration}min\n\nLeft Click: Toggle Connection\nRight Click: Pause {current_duration}min\nMiddle Click: Refresh\nScroll: Adjust pause duration"
+            tooltip = f"Tailscale Connected\nMachine: {status['machine_name']}\nIP: {status.get('tailscale_ip', 'N/A')}\nOnline Peers: {status.get('peer_count', 0)}\nPause Duration: {current_duration}min\n\nLeft Click: Toggle Connection\nRight Click: Pause {current_duration}min\nMiddle Click: Copy IP to clipboard\nScroll: Adjust pause duration"
         elif status['state'] == 'Paused':
             icon = "⏸️"
             text = "TS"
             css_class = "paused"
-            tooltip = f"Tailscale Paused\nMachine: {status['machine_name']}\n{status['pause_info']}\nPause Duration: {current_duration}min\n\nLeft Click: Resume\nRight Click: Stop\nMiddle Click: Refresh\nScroll: Adjust pause duration"
+            tooltip = f"Tailscale Paused\nMachine: {status['machine_name']}\n{status['pause_info']}\nPause Duration: {current_duration}min\n\nLeft Click: Resume\nRight Click: Stop\nMiddle Click: Copy IP to clipboard\nScroll: Adjust pause duration"
         elif status['state'] == 'Stopped':
             icon = "🔴"
             text = "TS"
             css_class = "disconnected"
-            tooltip = f"Tailscale Disconnected\nMachine: {status['machine_name']}\nPause Duration: {current_duration}min\n\nLeft Click: Connect\nRight Click: Pause {current_duration}min\nMiddle Click: Refresh\nScroll: Adjust pause duration"
+            tooltip = f"Tailscale Disconnected\nMachine: {status['machine_name']}\nPause Duration: {current_duration}min\n\nLeft Click: Connect\nRight Click: Pause {current_duration}min\nMiddle Click: Copy IP to clipboard\nScroll: Adjust pause duration"
         else:
             icon = "🔴"
             text = "TS"
             css_class = "error"
             error_msg = status.get('error', 'Unknown error')
-            tooltip = f"Tailscale Error\nState: {status['state']}\nError: {error_msg}\nPause Duration: {current_duration}min\n\nLeft Click: Try Connect\nMiddle Click: Refresh\nScroll: Adjust pause duration"
+            tooltip = f"Tailscale Error\nState: {status['state']}\nError: {error_msg}\nPause Duration: {current_duration}min\n\nLeft Click: Try Connect\nMiddle Click: Copy IP to clipboard\nScroll: Adjust pause duration"
 
         return {
             "text": f"{icon} {text}",
@@ -313,10 +313,47 @@ class WaybarTailscaleModule:
                 self.start_tailscale()
                 
         elif button == "middle":
-            # Refresh - just update status
-            pass
+            # Copy IP to clipboard
+            self.copy_ip_to_clipboard()
 
-    def handle_scroll(self, direction):
+    def copy_ip_to_clipboard(self):
+        """Copy the current machine's Tailscale IP to clipboard"""
+        try:
+            # Get the current status to extract IP
+            status = self.get_tailscale_status()
+            ip_address = status.get('tailscale_ip', 'N/A')
+            
+            if ip_address and ip_address != 'N/A':
+                # Try different clipboard methods
+                clipboard_commands = [
+                    ['wl-copy', ip_address],  # Wayland
+                    ['xclip', '-selection', 'clipboard', '-i'],  # X11
+                    ['xsel', '--clipboard', '--input']  # X11 alternative
+                ]
+                
+                for cmd in clipboard_commands:
+                    try:
+                        if cmd[0] == 'wl-copy':
+                            result = subprocess.run(cmd, timeout=2)
+                        else:
+                            result = subprocess.run(cmd, input=ip_address, text=True, timeout=2)
+                        
+                        if result.returncode == 0:
+                            return True
+                    except (subprocess.TimeoutExpired, FileNotFoundError):
+                        continue
+                
+                # Fallback: try to use python clipboard libraries if available
+                try:
+                    import pyperclip
+                    pyperclip.copy(ip_address)
+                    return True
+                except ImportError:
+                    pass
+                    
+        except Exception:
+            pass
+        return False
         """Handle scroll wheel actions"""
         new_duration, changed = self.adjust_pause_duration(direction)
         return new_duration if changed else None
