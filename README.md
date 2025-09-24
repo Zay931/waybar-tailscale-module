@@ -14,13 +14,13 @@ This tool simply provides a convenient interface for the official Tailscale CLI 
 
 ## Features
 
-- **Visual Status Indicators**: Green dot (connected), red dot (disconnected), pause emoji (paused)
+- **Visual Status Indicators**: connected,disconnected,paused
 - **Rich Tooltips**: Hover to see detailed connection info, IP address, peer count, and available actions
 - **Click Actions**:
   - **Left Click**: Toggle connection (connect/disconnect)
   - **Right Click**: Context-sensitive actions (pause when connected, stop when paused)
-  - **Middle Click**: Refresh status
-- **Auto-Resume**: Automatically resumes connection after 5-minute pause
+  - **Middle Click**: Copy current machine Tailscale IP to clipboard
+- **Auto-Resume**: Automatically resumes connection after the specified pause duration
 - **Lightweight**: Pure Python with no external dependencies beyond Tailscale CLI
 
 ## Screenshots
@@ -32,7 +32,7 @@ The module displays in your Waybar as:
 
 ## Prerequisites
 
-- **Waybar** with custom module support
+- **Waybar** 
 - **Tailscale** installed and configured
 - **Python 3.6+**
 - **Sudo access** for Tailscale commands (see setup below)
