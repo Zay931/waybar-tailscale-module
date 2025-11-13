@@ -1,8 +1,4 @@
 #!/usr/bin/env python3
-"""
-Waybar Tailscale Module
-A compact Tailscale manager for Waybar that provides status display and click actions.
-"""
 
 import json
 import subprocess
@@ -354,6 +350,8 @@ class WaybarTailscaleModule:
         except Exception:
             pass
         return False
+
+    def handle_scroll(self, direction):
         """Handle scroll wheel actions"""
         new_duration, changed = self.adjust_pause_duration(direction)
         return new_duration if changed else None
