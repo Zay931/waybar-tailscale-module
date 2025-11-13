@@ -110,21 +110,6 @@ whoami
 pkill waybar && waybar &
 ```
 
-## Usage
-
-### Status Indicators
-- **🟢 TS**: Connected
-- **🔴 TS**: Disconnected
-- **⏸️ TS**: Paused
-
-### Interactions
-- **Hover**: View detailed status, IP address, peer count, and available actions
-- **Left Click**: Toggle connection state
-- **Right Click**: Context-sensitive action (pause when connected, stop when paused)
-- **Middle Click**: Copy current machine IP address
-
-
-
 
 ## License
 
