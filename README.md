@@ -124,14 +124,6 @@ pkill waybar && waybar &
 - **Middle Click**: Copy current machine IP address
 
 
-## Customization
-
-### Change Update Interval
-Modify the `interval` value in your Waybar config:
-```json
-"interval": 5  // Update every 5 seconds instead of 10
-```
-
 
 
 ## License
