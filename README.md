@@ -15,20 +15,22 @@ This tool simply provides a convenient interface for the official Tailscale CLI 
 ## Features
 
 - **Visual Status Indicators**: connected,disconnected,paused
-- **Rich Tooltips**: Hover to see detailed connection info, IP address, peer count, and available actions
+- **Tooltips**: Hover to see detailed connection info, IP address, peer count, and available actions
 - **Click Actions**:
   - **Left Click**: Toggle connection (connect/disconnect)
   - **Right Click**: Context-sensitive actions (pause when connected, stop when paused)
   - **Middle Click**: Copy current machine Tailscale IP to clipboard
-- **Auto-Resume**: Automatically resumes connection after the specified pause duration
-- **Lightweight**: Pure Python with no external dependencies beyond Tailscale CLI
 
 ## Screenshots
 
 The module displays in your Waybar as:
-- 🟢 TS (Connected)
-- 🔴 TS (Disconnected)  
-- ⏸️ TS (Paused)
+
+<img width="310" height="230" alt="screenshot-2025-11-13_20-09-38" src="https://github.com/user-attachments/assets/ee030c73-a66f-40d0-a38f-196196d200c9" /> <img width="312" height="230" alt="screenshot-2025-11-13_20-12-42" src="https://github.com/user-attachments/assets/cb1e8c63-9962-4f0b-9b1a-a24c9df9ca34" /> <img width="309" height="230" alt="screenshot-2025-11-13_20-13-03" src="https://github.com/user-attachments/assets/0172c0fe-5b49-4040-804e-445b6e1eba64" />
+
+
+
+
+
 
 ## Prerequisites
 
@@ -42,15 +44,13 @@ The module displays in your Waybar as:
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/waybar-tailscale-module.git
+git clone https://github.com/Zay931/waybar-tailscale-module.git
 cd waybar-tailscale-module
 ```
 
 ### 2. Copy the Module Script
 
 ```bash
-# Create waybar config directory if it doesn't exist
-mkdir -p ~/.config/waybar
 
 # Copy the module script
 cp tailscale_module.py ~/.config/waybar/
@@ -64,10 +64,10 @@ Add the module to your `~/.config/waybar/config.jsonc`:
 ```jsonc
 {
   // Add "custom/tailscale" to your modules array
-  "modules-right": ["custom/tailscale", "network", "battery", "clock"],
+  "modules-right": [ "network", "battery", "clock", "custom/tailscale"],
   
   // Add the module configuration
-  "custom/tailscale": {
+   "custom/tailscale": {
     "format": "{}",
     "exec": "python3 ~/.config/waybar/tailscale_module.py --status",
     "return-type": "json",
@@ -76,18 +76,15 @@ Add the module to your `~/.config/waybar/config.jsonc`:
     "on-click": "python3 ~/.config/waybar/tailscale_module.py --click left",
     "on-click-right": "python3 ~/.config/waybar/tailscale_module.py --click right",
     "on-click-middle": "python3 ~/.config/waybar/tailscale_module.py --click middle",
+    "on-scroll-up": "python3 ~/.config/waybar/tailscale_module.py --scroll up",
+    "on-scroll-down": "python3 ~/.config/waybar/tailscale_module.py --scroll down",
     "escape": true
   }
 }
 ```
+You can refer to the **config.jsonc** file example.
 
-### 4. Add CSS Styling
 
-Append the contents of `waybar-styles.css` to your `~/.config/waybar/style.css`:
-
-```bash
-cat waybar-styles.css >> ~/.config/waybar/style.css
-```
 
 ### 5. Configure Sudo Access (Recommended)
 
@@ -102,6 +99,11 @@ Add this line (replace `yourusername` with your actual username):
 yourusername ALL=(ALL) NOPASSWD: /usr/bin/tailscale
 ```
 
+to get your username run this command:
+```bash
+whoami
+```
+
 ### 6. Restart Waybar
 
 ```bash
@@ -111,18 +113,16 @@ pkill waybar && waybar &
 ## Usage
 
 ### Status Indicators
-- **🟢 TS**: Connected to Tailscale network
-- **🔴 TS**: Disconnected from network
-- **⏸️ TS**: Paused (will auto-resume in 5 minutes)
+- **🟢 TS**: Connected
+- **🔴 TS**: Disconnected
+- **⏸️ TS**: Paused
 
 ### Interactions
 - **Hover**: View detailed status, IP address, peer count, and available actions
 - **Left Click**: Toggle connection state
 - **Right Click**: Context-sensitive action (pause when connected, stop when paused)
-- **Middle Click**: Refresh status immediately
+- **Middle Click**: Copy current machine IP address
 
-### Pause Feature
-When you right-click while connected, Tailscale will pause for 5 minutes and automatically resume. The tooltip shows the remaining pause time. You can manually resume by left-clicking or stop completely by right-clicking while paused.
 
 ## Customization
 
@@ -131,64 +131,6 @@ Modify the `interval` value in your Waybar config:
 ```json
 "interval": 5  // Update every 5 seconds instead of 10
 ```
-
-### Customize Icons
-Edit the `format_output` method in `tailscale_module.py`:
-```python
-icon = "🟢"  # Change to your preferred icon
-```
-
-### Adjust Colors
-Modify the CSS classes in `waybar-styles.css`:
-```css
-#custom-tailscale.connected {
-    background-color: #your-color;
-    color: #your-text-color;
-}
-```
-
-### Change Pause Duration
-Edit the pause duration in `tailscale_module.py`:
-```python
-pause_end = datetime.now() + timedelta(minutes=10)  # 10 minutes instead of 5
-```
-
-## Troubleshooting
-
-### Module Not Appearing
-- Verify the Python script path in your Waybar config
-- Check that the script is executable: `chmod +x ~/.config/waybar/tailscale_module.py`
-- Test the script manually: `python3 ~/.config/waybar/tailscale_module.py --status`
-
-### Permission Errors
-- Set up passwordless sudo for Tailscale (see installation step 5)
-- Verify your user can run: `tailscale status`
-
-### Click Actions Not Working
-- Test click commands manually: `python3 ~/.config/waybar/tailscale_module.py --click left`
-- Check Waybar logs by running `waybar` in a terminal
-
-### Styling Issues
-- Ensure CSS is properly appended to your style.css
-- Restart Waybar after CSS changes
-- Check for CSS syntax errors in the terminal output
-
-## Technical Details
-
-The module works by:
-1. Polling `tailscale status --json` every 10 seconds
-2. Parsing the JSON output to determine connection state
-3. Formatting the output for Waybar with appropriate icons and tooltips
-4. Handling click events to execute Tailscale commands via sudo
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and test thoroughly
-4. Commit your changes: `git commit -am 'Add feature'`
-5. Push to the branch: `git push origin feature-name`
-6. Submit a pull request
 
 
 
